@@ -44,6 +44,19 @@
   #result img{max-width:100%;border-radius:8px;border:1px solid var(--line);background:repeating-conic-gradient(#222 0 25%,#1a1a1a 0 50%) 0 0/20px 20px}
   video{max-width:100%;border-radius:8px;margin-top:10px}
   .hide{display:none!important}
+  /* Çift tutamaçlı aralık seçici */
+  .rng{position:relative;height:44px}
+  .rtrack,.rfill{position:absolute;top:19px;height:6px;border-radius:3px}
+  .rtrack{left:0;right:0;background:var(--line)}
+  .rfill{background:var(--acc)}
+  .rng input[type=range]{position:absolute;left:0;top:0;width:100%;height:44px;margin:0;padding:0;border:0;background:transparent;pointer-events:none;-webkit-appearance:none;appearance:none;z-index:2}
+  .rng input[type=range]::-webkit-slider-runnable-track{background:transparent;height:44px;border:0}
+  .rng input[type=range]::-moz-range-track{background:transparent;border:0}
+  .rng input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;width:26px;height:26px;border-radius:50%;background:#fff;border:3px solid var(--acc);margin-top:9px;cursor:pointer}
+  .rng input[type=range]::-moz-range-thumb{pointer-events:auto;width:20px;height:20px;border-radius:50%;background:#fff;border:3px solid var(--acc);cursor:pointer}
+  /* Dosya girişi: display:none yerine görünmez ama erişilebilir (mobilde galeri/dosya seçici güvenle açılır) */
+  .vh{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0 0 0 0);pointer-events:none}
+  label.drop{display:block;font-size:1rem}
   footer{text-align:center;color:var(--mut);font-size:.8rem;padding:20px}
 
   /* ---- Tüm cihazlar için ortak iyileştirmeler ---- */
@@ -101,18 +114,31 @@
     </div>
 
     <div id="paneImg">
-      <div class="drop" id="dropImg"><b>Resimleri sürükle bırak</b> veya dokun / tıkla<br><small>PNG, JPG, WEBP… (dosya adına göre sıralanır)</small></div>
-      <input type="file" id="fileImg" accept="image/*" multiple class="hide">
+      <label class="drop" id="dropImg" for="fileImg"><b>Resimleri sürükle bırak</b> veya dokun / tıkla<br><small>PNG, JPG, WEBP… (dosya adına göre sıralanır)</small></label>
+      <input type="file" id="fileImg" accept="image/*" multiple class="vh">
       <div class="thumbs" id="thumbs"></div>
     </div>
 
     <div id="paneVid" class="hide">
-      <div class="drop" id="dropVid"><b>Videoyu sürükle bırak</b> veya dokun / tıkla<br><small>MP4, WEBM, MOV…</small></div>
-      <input type="file" id="fileVid" accept="video/*" class="hide">
+      <label class="drop" id="dropVid" for="fileVid"><b>Videoyu sürükle bırak</b> veya dokun / tıkla<br><small>MP4, WEBM, MOV…</small></label>
+      <input type="file" id="fileVid" accept="video/*,.mp4,.mov,.webm,.m4v" class="vh">
       <video id="vid" controls class="hide" muted playsinline></video>
-      <div class="grid hide" id="vidOpts" style="margin-top:12px">
-        <label>Başlangıç (sn)<input type="number" id="vStart" min="0" step="0.1" value="0"></label>
-        <label>Bitiş (sn)<input type="number" id="vEnd" min="0" step="0.1" value="3"></label>
+      <div class="hide" id="vidOpts" style="margin-top:12px">
+        <div style="color:var(--mut);font-size:.85rem;margin-bottom:4px">GIF yapılacak aralığı iki tutamaçla seç (video seçtiğin yere atlar):</div>
+        <div class="rng">
+          <div class="rtrack"></div>
+          <div class="rfill" id="rfill"></div>
+          <input type="range" id="vStart" min="0" max="1" step="0.1" value="0">
+          <input type="range" id="vEnd" min="0.1" max="1" step="0.1" value="1">
+        </div>
+        <div class="row" style="justify-content:space-between;margin-top:4px;font-size:.9rem">
+          <span id="tStart">0.0 sn</span><b id="tLen"></b><span id="tEnd"></span>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn sec" id="setS" type="button">⏴ Başlangıcı buraya al</button>
+          <button class="btn sec" id="setE" type="button">Bitişi buraya al ⏵</button>
+          <button class="btn sec" id="playSel" type="button">▶ Seçimi oynat</button>
+        </div>
       </div>
     </div>
   </section>
@@ -207,7 +233,6 @@ $("tabVid").onclick = () => setMode("vid");
 // ---------- Drop alanları ----------
 function wireDrop(dropId, inputId, handler){
   const d = $(dropId), i = $(inputId);
-  d.onclick = () => i.click();
   d.ondragover = e => { e.preventDefault(); d.classList.add("over"); };
   d.ondragleave = () => d.classList.remove("over");
   d.ondrop = e => { e.preventDefault(); d.classList.remove("over"); handler([...e.dataTransfer.files]); };
@@ -248,7 +273,9 @@ function move(i,dir){
 
 // ---------- Video ----------
 function setVideo(f){
-  if(!f || !f.type.startsWith("video/")) return;
+  if(!f) return;
+  const okType = f.type.startsWith("video/") || /\.(mp4|mov|webm|m4v|mkv|avi)$/i.test(f.name);
+  if(!okType){ $("status").textContent = "Lütfen bir video dosyası seç."; return; }
   if(videoURL) URL.revokeObjectURL(videoURL);
   videoURL = URL.createObjectURL(f);
   const v = $("vid");
@@ -256,9 +283,11 @@ function setVideo(f){
   v.classList.remove("hide");
   $("vidOpts").classList.remove("hide");
   v.onloadedmetadata = () => {
+    const max = Math.max(0.2, Math.floor(v.duration*10)/10);
+    for(const id of ["vStart","vEnd"]){ $(id).max = max; }
     $("vStart").value = 0;
-    $("vEnd").value = Math.min(v.duration, 3).toFixed(1);
-    $("vEnd").max = v.duration;
+    $("vEnd").value = Math.min(max, 3);
+    syncRange();
     updateInfo();
   };
 }
@@ -272,7 +301,51 @@ $("res").onchange = () => {
   $("chWrap").classList.toggle("hide", !c);
   updateInfo();
 };
-["cw","ch","vStart","vEnd","pp"].forEach(id => $(id).oninput = updateInfo);
+["cw","ch","pp"].forEach(id => $(id).oninput = updateInfo);
+
+// ---------- Video aralık seçici ----------
+const fmtT = t => t.toFixed(1) + " sn";
+function syncRange(src){
+  const s = $("vStart"), e = $("vEnd"), gap = 0.1;
+  let a = +s.value, b = +e.value;
+  if(src === "s" && a > b - gap){ a = Math.max(0, b - gap); s.value = a; }
+  if(src === "e" && b < a + gap){ b = Math.min(+e.max, a + gap); e.value = b; }
+  const max = +s.max || 1;
+  const f = $("rfill");
+  f.style.left  = `calc(13px + (100% - 26px) * ${a/max})`;
+  f.style.width = `calc((100% - 26px) * ${Math.max(0,(b-a)/max)})`;
+  // iki tutamaç sağ uçta üst üste gelirse başlangıç tutamacı üstte olsun
+  s.style.zIndex = a > max/2 ? 3 : 2;
+  $("tStart").textContent = fmtT(a);
+  $("tEnd").textContent = fmtT(b);
+  $("tLen").textContent = "Süre: " + fmtT(b - a);
+}
+function previewAt(t){
+  const v = $("vid");
+  if(!v.src) return;
+  v.pause();
+  try{ v.currentTime = Math.min(t, Math.max(0, v.duration - 0.05)); }catch(_){}
+}
+$("vStart").addEventListener("input", () => { syncRange("s"); previewAt(+$("vStart").value); updateInfo(); });
+$("vEnd").addEventListener("input",   () => { syncRange("e"); previewAt(+$("vEnd").value);   updateInfo(); });
+$("setS").onclick = () => {
+  const v = $("vid"); if(!v.src) return;
+  $("vStart").value = Math.min(v.currentTime, +$("vEnd").value - 0.1);
+  syncRange("s"); updateInfo();
+};
+$("setE").onclick = () => {
+  const v = $("vid"); if(!v.src) return;
+  $("vEnd").value = Math.max(v.currentTime, +$("vStart").value + 0.1);
+  syncRange("e"); updateInfo();
+};
+$("playSel").onclick = () => {
+  const v = $("vid"); if(!v.src) return;
+  const a = +$("vStart").value, b = +$("vEnd").value;
+  v.currentTime = a;
+  v.play();
+  const stop = () => { if(v.currentTime >= b || v.paused){ v.pause(); v.removeEventListener("timeupdate", stop); } };
+  v.addEventListener("timeupdate", stop);
+};
 
 function targetSize(srcW, srcH){
   const r = $("res").value;
